@@ -1,6 +1,7 @@
 use actix_web::{web, App, HttpServer};
 
 mod app_state;
+mod models;
 mod services;
 
 #[actix_web::main]
