@@ -43,6 +43,6 @@ impl RestServer {
         };
 
         let server = HttpServer::new(factory).bind(("127.0.0.1", 80));
-        (server.unwrap().run().await;
+        server.unwrap().run().await;
     }
 }

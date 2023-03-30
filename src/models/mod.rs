@@ -2,24 +2,25 @@ use mysql::prelude::Queryable;
 
 const URL: &str = "mysql://root:==PaSsWoRd==@localhost:3306/main_database";
 
-const CREATE_TABLE: &str = r"CREATE TABLE IF NOT EXISTS Payments(
-    id int not null,
-    amount int not null,
-    name text
-)";
+const CREATE_TABLE: &str = r"CREATE TABLE IF NOT EXISTS Users (
+    ID INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    Name VARCHAR(50) NOT NULL,
+    SecondName VARCHAR(50) NOT NULL,
+    Age INT NOT NULL,
+    Male BOOLEAN NOT NULL,
+    Interests TEXT NOT NULL,
+    City VARCHAR(50) NOT NULL,
+    Password VARCHAR(50) NOT NULL,
+    Email VARCHAR(50) NOT NULL UNIQUE,
+    INDEX (Name, Email)
+    ) ENGINE=InnoDB CHARSET=utf8";
 
 pub struct Connection {
     pool: mysql::Pool,
 }
 
-pub struct Payments {
-    pub id: u32,
-    pub amount: u32,
-    pub name: String,
-}
-
-pub struct PaymentsTable {
-    pub conn: mysql::PooledConn,
+pub struct UsersTable {
+    pub pool: mysql::Pool,
 }
 
 impl Connection {
@@ -34,13 +35,13 @@ impl Connection {
     }
 }
 
-impl PaymentsTable {
-    pub fn new(pool: &mysql::Pool) -> PaymentsTable {
-        let mut table = PaymentsTable {
-            conn: pool.get_conn().unwrap(),
-        };
+impl UsersTable {
+    pub fn new(pool: &mysql::Pool) -> UsersTable {
+        let table = UsersTable { pool: pool.clone() };
 
-        table.conn.query_drop(CREATE_TABLE).unwrap();
+        let mut conn = table.pool.get_conn().unwrap();
+
+        conn.query_drop(CREATE_TABLE).unwrap();
 
         return table;
     }
