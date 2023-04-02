@@ -20,7 +20,17 @@ async fn get_by_id(path: web::Path<u32>, data: web::Data<AppState>) -> impl Resp
             let stmt = conn.prep(SELECT_BY_ID).unwrap();
             let param = params! {"id" => id};
 
-            let mut row: Row = conn.exec_first(stmt, param).unwrap().unwrap();
+            let mut row: Row;
+
+            match conn.exec_first(stmt, param) {
+                Ok(option) => match option {
+                    None => return HttpResponse::NotFound().body("user not found"),
+                    Some(user) => row = user,
+                },
+                Err(_) => {
+                    return HttpResponse::NotFound().body("user not found");
+                }
+            };
 
             let mut person = Map::new();
             person.insert(
