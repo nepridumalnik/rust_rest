@@ -12,6 +12,63 @@ pub fn setup_services(config: &mut web::ServiceConfig) {
     config.service(get_by_id);
 }
 
+fn get_person(row: Row) -> std::result::Result<Map<String, Value>, MySqlError> {
+    let result = std::panic::catch_unwind(move || {
+        let mut row: Row = row;
+        let mut person = Map::new();
+
+        person.insert(
+            "ID".to_string(),
+            Value::from(row.take::<u32, _>("ID").unwrap()),
+        );
+        person.insert(
+            "Name".to_string(),
+            Value::from(row.take::<String, _>("Name").unwrap()),
+        );
+        person.insert(
+            "SecondName".to_string(),
+            Value::from(row.take::<String, _>("SecondName").unwrap()),
+        );
+        person.insert(
+            "Age".to_string(),
+            Value::from(row.take::<u32, _>("Age").unwrap()),
+        );
+        person.insert(
+            "Male".to_string(),
+            Value::from(row.take::<bool, _>("Male").unwrap()),
+        );
+        person.insert(
+            "Interests".to_string(),
+            Value::from(row.take::<String, _>("Interests").unwrap()),
+        );
+        person.insert(
+            "City".to_string(),
+            Value::from(row.take::<String, _>("City").unwrap()),
+        );
+        person.insert(
+            "Password".to_string(),
+            Value::from(row.take::<String, _>("Password").unwrap()),
+        );
+        person.insert(
+            "Email".to_string(),
+            Value::from(row.take::<String, _>("Email").unwrap()),
+        );
+
+        return person;
+    });
+
+    match result {
+        Ok(person) => return Ok(person),
+        Err(_) => {
+            return Err(MySqlError {
+                code: 0,
+                message: "Failed when getting user".to_string(),
+                state: "Failed".to_string(),
+            })
+        }
+    }
+}
+
 #[get("/user/get/{id}")]
 async fn get_by_id(path: web::Path<u32>, data: web::Data<AppState>) -> impl Responder {
     let id: u32 = path.into_inner();
@@ -20,7 +77,7 @@ async fn get_by_id(path: web::Path<u32>, data: web::Data<AppState>) -> impl Resp
             let stmt = conn.prep(SELECT_BY_ID).unwrap();
             let param = params! {"id" => id};
 
-            let mut row: Row;
+            let row: Row;
 
             match conn.exec_first(stmt, param) {
                 Ok(option) => match option {
@@ -32,45 +89,12 @@ async fn get_by_id(path: web::Path<u32>, data: web::Data<AppState>) -> impl Resp
                 }
             };
 
-            let mut person = Map::new();
-            person.insert(
-                "ID".to_string(),
-                Value::from(row.take::<u32, _>("ID").unwrap()),
-            );
-            person.insert(
-                "Name".to_string(),
-                Value::from(row.take::<String, _>("Name").unwrap()),
-            );
-            person.insert(
-                "SecondName".to_string(),
-                Value::from(row.take::<String, _>("SecondName").unwrap()),
-            );
-            person.insert(
-                "Age".to_string(),
-                Value::from(row.take::<u32, _>("Age").unwrap()),
-            );
-            person.insert(
-                "Male".to_string(),
-                Value::from(row.take::<bool, _>("Male").unwrap()),
-            );
-            person.insert(
-                "Interests".to_string(),
-                Value::from(row.take::<String, _>("Interests").unwrap()),
-            );
-            person.insert(
-                "City".to_string(),
-                Value::from(row.take::<String, _>("City").unwrap()),
-            );
-            person.insert(
-                "Password".to_string(),
-                Value::from(row.take::<String, _>("Password").unwrap()),
-            );
-            person.insert(
-                "Email".to_string(),
-                Value::from(row.take::<String, _>("Email").unwrap()),
-            );
-
-            return HttpResponse::Ok().body(serde_json::to_string(&person).unwrap());
+            match get_person(row) {
+                Ok(person) => {
+                    return HttpResponse::Ok().body(serde_json::to_string(&person).unwrap())
+                }
+                Err(error) => return HttpResponse::NotFound().body(error.to_string()),
+            }
         }
         Err(error) => {
             return HttpResponse::NotFound().body(error.to_string());
