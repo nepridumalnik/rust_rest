@@ -1,15 +1,30 @@
 use crate::app_state::AppState;
 
-use actix_web::{get, web, HttpResponse, Responder};
+use actix_web::{get, post, web, HttpResponse, Responder};
 use mysql::prelude::*;
 use mysql::*;
+use serde::Deserialize;
 use serde_json::{Map, Value};
 
 static SELECT_BY_ID: &str = r"SELECT ID, Name, SecondName,
     Age, Male, Interests, City, Password, Email FROM Users WHERE ID = :id";
+static INSERT_USER: &str = r"INSERT INTO Users(Name, SecondName, Age, Male, Interests, City, Password, Email)
+    VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
+
+#[derive(Deserialize)]
+struct User {
+    first_name: String,
+    second_name: String,
+    age: u32,
+    male: bool,
+    interests: String,
+    city: String,
+    password: String,
+    email: String,
+}
 
 pub fn setup_services(config: &mut web::ServiceConfig) {
-    config.service(get_by_id);
+    config.service(get_by_id).service(register_user);
 }
 
 fn get_person(row: Row) -> std::result::Result<Map<String, Value>, MySqlError> {
@@ -69,6 +84,40 @@ fn get_person(row: Row) -> std::result::Result<Map<String, Value>, MySqlError> {
     }
 }
 
+#[post("/user/register")]
+async fn register_user(data: web::Data<AppState>, user: web::Json<User>) -> impl Responder {
+    match data.users.pool.get_conn() {
+        Ok(mut conn) => {
+            let stmt = conn.prep(INSERT_USER).unwrap();
+            let res = conn.exec_drop(
+                stmt,
+                (
+                    user.first_name.clone(),
+                    user.second_name.clone(),
+                    user.age,
+                    user.male,
+                    user.interests.clone(),
+                    user.city.clone(),
+                    user.password.clone(),
+                    user.email.clone(),
+                ),
+            );
+
+            match res {
+                Ok(()) => {
+                    return HttpResponse::Ok().body("");
+                }
+                Err(error) => {
+                    return HttpResponse::BadRequest().body(error.to_string());
+                }
+            }
+        }
+        Err(error) => {
+            return HttpResponse::BadRequest().body(error.to_string());
+        }
+    };
+}
+
 #[get("/user/get/{id}")]
 async fn get_by_id(path: web::Path<u32>, data: web::Data<AppState>) -> impl Responder {
     let id: u32 = path.into_inner();
@@ -76,13 +125,12 @@ async fn get_by_id(path: web::Path<u32>, data: web::Data<AppState>) -> impl Resp
         Ok(mut conn) => {
             let stmt = conn.prep(SELECT_BY_ID).unwrap();
             let param = params! {"id" => id};
-
             let row: Row;
 
             match conn.exec_first(stmt, param) {
                 Ok(option) => match option {
-                    None => return HttpResponse::NotFound().body("user not found"),
                     Some(user) => row = user,
+                    None => return HttpResponse::NotFound().body("user not found"),
                 },
                 Err(_) => {
                     return HttpResponse::NotFound().body("user not found");

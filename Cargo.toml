@@ -9,3 +9,4 @@ edition = "2021"
 actix-web = "*"
 mysql = "*"
 serde_json = "*"
+serde = { version = "*", features = ["derive"] }

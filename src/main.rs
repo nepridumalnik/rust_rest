@@ -1,6 +1,5 @@
 mod app_state;
 mod models;
-mod services;
 mod users;
 
 use actix_web::{web, App, HttpServer};
