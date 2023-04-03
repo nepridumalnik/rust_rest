@@ -9,11 +9,9 @@ pub struct AppState {
 
 impl AppState {
     pub fn new() -> AppState {
-        let conn = models::Connection::new();
-
         AppState {
             counter: Mutex::new(0),
-            users: models::UsersTable::new(conn.get_pool()),
+            users: models::UsersTable::new(),
         }
     }
 }

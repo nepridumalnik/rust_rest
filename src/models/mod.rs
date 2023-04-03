@@ -15,29 +15,15 @@ const CREATE_TABLE: &str = r"CREATE TABLE IF NOT EXISTS Users (
     INDEX (Name, Email)
     ) ENGINE=InnoDB CHARSET=utf8";
 
-pub struct Connection {
-    pool: mysql::Pool,
-}
-
 pub struct UsersTable {
     pub pool: mysql::Pool,
 }
 
-impl Connection {
-    pub fn new() -> Connection {
-        Connection {
-            pool: mysql::Pool::new(URL).unwrap(),
-        }
-    }
-
-    pub fn get_pool(&self) -> &mysql::Pool {
-        return &self.pool;
-    }
-}
-
 impl UsersTable {
-    pub fn new(pool: &mysql::Pool) -> UsersTable {
-        let table = UsersTable { pool: pool.clone() };
+    pub fn new() -> UsersTable {
+        let table = UsersTable {
+            pool: mysql::Pool::new(URL).unwrap(),
+        };
 
         let mut conn = table.pool.get_conn().unwrap();
 
