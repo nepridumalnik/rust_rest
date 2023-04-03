@@ -27,6 +27,40 @@ pub fn setup_services(config: &mut web::ServiceConfig) {
     config.service(get_by_id).service(register_user);
 }
 
+#[post("/user/register")]
+async fn register_user(data: web::Data<AppState>, user: web::Json<User>) -> impl Responder {
+    match data.db.pool.get_conn() {
+        Ok(mut conn) => {
+            let stmt = conn.prep(INSERT_USER).unwrap();
+            let res = conn.exec_drop(
+                stmt,
+                (
+                    user.first_name.clone(),
+                    user.second_name.clone(),
+                    user.age,
+                    user.male,
+                    user.interests.clone(),
+                    user.city.clone(),
+                    user.password.clone(),
+                    user.email.clone(),
+                ),
+            );
+
+            match res {
+                Ok(()) => {
+                    return HttpResponse::Ok().body("");
+                }
+                Err(error) => {
+                    return HttpResponse::BadRequest().body(error.to_string());
+                }
+            }
+        }
+        Err(error) => {
+            return HttpResponse::BadRequest().body(error.to_string());
+        }
+    };
+}
+
 fn get_person(row: Row) -> std::result::Result<Map<String, Value>, MySqlError> {
     let result = std::panic::catch_unwind(move || {
         let mut row: Row = row;
@@ -84,44 +118,10 @@ fn get_person(row: Row) -> std::result::Result<Map<String, Value>, MySqlError> {
     }
 }
 
-#[post("/user/register")]
-async fn register_user(data: web::Data<AppState>, user: web::Json<User>) -> impl Responder {
-    match data.users.pool.get_conn() {
-        Ok(mut conn) => {
-            let stmt = conn.prep(INSERT_USER).unwrap();
-            let res = conn.exec_drop(
-                stmt,
-                (
-                    user.first_name.clone(),
-                    user.second_name.clone(),
-                    user.age,
-                    user.male,
-                    user.interests.clone(),
-                    user.city.clone(),
-                    user.password.clone(),
-                    user.email.clone(),
-                ),
-            );
-
-            match res {
-                Ok(()) => {
-                    return HttpResponse::Ok().body("");
-                }
-                Err(error) => {
-                    return HttpResponse::BadRequest().body(error.to_string());
-                }
-            }
-        }
-        Err(error) => {
-            return HttpResponse::BadRequest().body(error.to_string());
-        }
-    };
-}
-
 #[get("/user/get/{id}")]
 async fn get_by_id(path: web::Path<u32>, data: web::Data<AppState>) -> impl Responder {
     let id: u32 = path.into_inner();
-    match data.users.pool.get_conn() {
+    match data.db.pool.get_conn() {
         Ok(mut conn) => {
             let stmt = conn.prep(SELECT_BY_ID).unwrap();
             let param = params! {"id" => id};

@@ -1,5 +1,5 @@
 mod app_state;
-mod models;
+mod connection;
 mod users;
 
 use actix_web::{web, App, HttpServer};

@@ -15,13 +15,13 @@ const CREATE_TABLE: &str = r"CREATE TABLE IF NOT EXISTS Users (
     INDEX (Name, Email)
     ) ENGINE=InnoDB CHARSET=utf8";
 
-pub struct UsersTable {
+pub struct Database {
     pub pool: mysql::Pool,
 }
 
-impl UsersTable {
-    pub fn new() -> UsersTable {
-        let table = UsersTable {
+impl Database {
+    pub fn new() -> Database {
+        let table = Database {
             pool: mysql::Pool::new(URL).unwrap(),
         };
 

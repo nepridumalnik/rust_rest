@@ -1,17 +1,17 @@
 use std::sync::Mutex;
 
-use crate::models;
+use crate::connection;
 
 pub struct AppState {
     pub counter: Mutex<u32>,
-    pub users: models::UsersTable,
+    pub db: connection::Database,
 }
 
 impl AppState {
     pub fn new() -> AppState {
         AppState {
             counter: Mutex::new(0),
-            users: models::UsersTable::new(),
+            db: connection::Database::new(),
         }
     }
 }
