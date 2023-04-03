@@ -5,7 +5,6 @@ use crate::models;
 pub struct AppState {
     pub counter: Mutex<u32>,
     pub users: models::UsersTable,
-    connection: models::Connection,
 }
 
 impl AppState {
@@ -15,7 +14,6 @@ impl AppState {
         AppState {
             counter: Mutex::new(0),
             users: models::UsersTable::new(conn.get_pool()),
-            connection: conn,
         }
     }
 }
