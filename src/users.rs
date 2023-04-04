@@ -3,13 +3,15 @@ use crate::app_state::AppState;
 use actix_web::{get, post, web, HttpResponse, Responder};
 use mysql::prelude::*;
 use mysql::*;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 static SELECT_BY_ID: &str = r"SELECT ID, Name, SecondName,
     Age, Male, Interests, City, Password, Email FROM Users WHERE ID = :id";
 static INSERT_USER: &str = r"INSERT INTO Users(Name, SecondName, Age, Male, Interests, City, Password, Email)
     VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
+static SEARCH_USERS: &str = r"SELECT ID, Name, SecondName, Age, Male, Interests, City, Password, Email
+    FROM Users WHERE Name LIKE :first_name AND SecondName LIKE :second_name";
 
 #[derive(Deserialize)]
 struct User {
@@ -23,8 +25,30 @@ struct User {
     email: String,
 }
 
+#[derive(Serialize)]
+struct SelectedUser {
+    id: u32,
+    first_name: String,
+    second_name: String,
+    age: u32,
+    male: bool,
+    interests: String,
+    city: String,
+    password: String,
+    email: String,
+}
+
+#[derive(Deserialize)]
+struct SearchUser {
+    first_name: String,
+    second_name: String,
+}
+
 pub fn setup_services(config: &mut web::ServiceConfig) {
-    config.service(get_by_id).service(register_user);
+    config
+        .service(get_by_id)
+        .service(register_user)
+        .service(search_user);
 }
 
 #[post("/user/register")]
@@ -148,4 +172,41 @@ async fn get_by_id(path: web::Path<u32>, data: web::Data<AppState>) -> impl Resp
             return HttpResponse::NotFound().body(error.to_string());
         }
     }
+}
+
+#[get("/user/search")]
+async fn search_user(data: web::Data<AppState>, search: web::Json<SearchUser>) -> impl Responder {
+    match data.db.pool.get_conn() {
+        Ok(mut conn) => {
+            let stmt = conn.prep(SEARCH_USERS).unwrap();
+            let param = params! {"first_name" => search.first_name.clone(), "second_name" => search.second_name.clone()};
+            let result = conn.exec_iter(stmt, param).map(|result| {
+                result.map(|x| x.unwrap()).map(|row| SelectedUser {
+                    id: row.get(0).unwrap(),
+                    first_name: row.get(1).unwrap(),
+                    second_name: row.get(2).unwrap(),
+                    age: row.get(3).unwrap(),
+                    male: row.get(4).unwrap(),
+                    interests: row.get(5).unwrap(),
+                    city: row.get(6).unwrap(),
+                    password: row.get(7).unwrap(),
+                    email: row.get(8).unwrap(),
+                })
+            });
+
+            let mut selected_users: Vec<SelectedUser> = Vec::new();
+            let it = result.unwrap();
+
+            for e in it {
+                selected_users.push(e);
+            }
+
+            let json_string = serde_json::to_string(&selected_users).unwrap();
+
+            return HttpResponse::Ok().body(json_string);
+        }
+        Err(error) => {
+            return HttpResponse::BadRequest().body(error.to_string());
+        }
+    };
 }
