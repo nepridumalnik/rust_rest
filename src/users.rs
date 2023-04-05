@@ -4,7 +4,7 @@ use actix_web::{get, post, web, HttpResponse, Responder};
 use mysql::prelude::*;
 use mysql::*;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 
 static SELECT_BY_ID: &str = r"SELECT ID, Name, SecondName,
     Age, Male, Interests, City, Password, Email FROM Users WHERE ID = :id";
@@ -12,6 +12,9 @@ static INSERT_USER: &str = r"INSERT INTO Users(Name, SecondName, Age, Male, Inte
     VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
 static SEARCH_USERS: &str = r"SELECT ID, Name, SecondName, Age, Male, Interests, City, Password, Email
     FROM Users WHERE Name LIKE :first_name AND SecondName LIKE :second_name";
+static SELECT_USER_AUTH: &str = r"SELECT ID, Name, SecondName, Age, Male, Interests, City, Password, Email
+    FROM Users WHERE Password = :password AND Email = :email";
+static INSERT_AUTHORIZED: &str = r"INSERT INTO Tokens(ID, Token) VALUES(:id, :token)";
 
 #[derive(Deserialize)]
 struct User {
@@ -25,7 +28,7 @@ struct User {
     email: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct SelectedUser {
     id: u32,
     first_name: String,
@@ -44,11 +47,18 @@ struct SearchUser {
     second_name: String,
 }
 
+#[derive(Deserialize)]
+struct LoginUser {
+    password: String,
+    email: String,
+}
+
 pub fn setup_services(config: &mut web::ServiceConfig) {
     config
         .service(get_by_id)
         .service(register_user)
-        .service(search_user);
+        .service(search_user)
+        .service(login);
 }
 
 #[post("/user/register")]
@@ -83,6 +93,11 @@ async fn register_user(data: web::Data<AppState>, user: web::Json<User>) -> impl
             return HttpResponse::BadRequest().body(error.to_string());
         }
     };
+}
+
+fn make_token(text: &String) -> String {
+    let hasher = md5::compute(text.as_bytes());
+    return format!("{:?}", hasher);
 }
 
 fn get_person(row: Row) -> std::result::Result<Map<String, Value>, MySqlError> {
@@ -209,4 +224,54 @@ async fn search_user(data: web::Data<AppState>, search: web::Json<SearchUser>) -
             return HttpResponse::BadRequest().body(error.to_string());
         }
     };
+}
+
+#[post("/login")]
+async fn login(data: web::Data<AppState>, login: web::Json<LoginUser>) -> impl Responder {
+    match data.db.pool.get_conn() {
+        Ok(mut conn) => {
+            let person: Map<String, Value>;
+
+            {
+                let stmt = conn.prep(SELECT_USER_AUTH).unwrap();
+                let param =
+                    params! {"password" => login.password.clone(), "email" => login.email.clone()};
+                let row: Row;
+
+                match conn.exec_first(stmt, param) {
+                    Ok(option) => match option {
+                        Some(user) => row = user,
+                        None => return HttpResponse::NotFound().body("user not found"),
+                    },
+                    Err(_) => {
+                        return HttpResponse::NotFound().body("user not found");
+                    }
+                };
+
+                person = get_person(row).unwrap();
+            }
+
+            {
+                let id = person["ID"].as_u64().unwrap() as u32;
+                let token: String = make_token(&login.password);
+                let stmt = conn.prep(INSERT_AUTHORIZED).unwrap();
+                let param = params! {"id" => id, "token" => token.clone()};
+                let result = conn.exec_drop(stmt, param);
+
+                if result.is_err() {
+                    return HttpResponse::Unauthorized().body("user was not authorized");
+                }
+
+                let json = json!(
+                    {
+                        "id": id,
+                        "token": token
+                    }
+                );
+
+                return HttpResponse::Ok().body(json.to_string());
+            }
+        }
+        Err(error) => return HttpResponse::BadRequest().body(error.to_string()),
+    }
 }
